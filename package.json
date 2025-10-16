@@ -1,0 +1,32 @@
+{
+  "name": "gps-tracking-server",
+  "version": "1.0.0",
+  "description": "سیستم ردیابی GPS آنلاین با SIM800L",
+  "main": "gps_server.js",
+  "scripts": {
+    "start": "node gps_server.js",
+    "dev": "nodemon gps_server.js",
+    "install-deps": "npm install"
+  },
+  "keywords": [
+    "gps",
+    "tracking",
+    "sim800l",
+    "arduino",
+    "real-time"
+  ],
+  "author": "GPS Tracker System",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "sqlite3": "^5.1.6",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

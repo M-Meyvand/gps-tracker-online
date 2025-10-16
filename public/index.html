@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سیستم ردیابی GPS آنلاین</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <!-- هدر -->
+        <header class="header">
+            <div class="header-content">
+                <h1><i class="fas fa-satellite-dish"></i> سیستم ردیابی GPS آنلاین</h1>
+                <div class="status-indicators">
+                    <div class="status-item" id="serverStatus">
+                        <i class="fas fa-server"></i>
+                        <span>سرور</span>
+                    </div>
+                    <div class="status-item" id="deviceStatus">
+                        <i class="fas fa-mobile-alt"></i>
+                        <span>دستگاه</span>
+                    </div>
+                    <div class="status-item" id="gpsStatus">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>GPS</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- کنترل‌ها -->
+        <div class="controls">
+            <div class="control-group">
+                <label for="deviceSelect">انتخاب دستگاه:</label>
+                <select id="deviceSelect">
+                    <option value="">در حال بارگذاری...</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label for="timeRange">بازه زمانی:</label>
+                <select id="timeRange">
+                    <option value="1">1 ساعت گذشته</option>
+                    <option value="6">6 ساعت گذشته</option>
+                    <option value="24" selected>24 ساعت گذشته</option>
+                    <option value="168">7 روز گذشته</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <button id="refreshBtn" class="btn btn-primary">
+                    <i class="fas fa-sync-alt"></i> به‌روزرسانی
+                </button>
+                <button id="clearTrackBtn" class="btn btn-secondary">
+                    <i class="fas fa-trash"></i> پاک کردن مسیر
+                </button>
+            </div>
+        </div>
+
+        <!-- آمار -->
+        <div class="stats" id="stats">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-map-pin"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="totalPoints">-</div>
+                    <div class="stat-label">نقاط ردیابی</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-tachometer-alt"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="avgSpeed">-</div>
+                    <div class="stat-label">سرعت متوسط (km/h)</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="trackDuration">-</div>
+                    <div class="stat-label">مدت ردیابی</div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-route"></i>
+                </div>
+                <div class="stat-content">
+                    <div class="stat-value" id="totalDistance">-</div>
+                    <div class="stat-label">مسافت کل (km)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- نقشه -->
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="map-controls">
+                <button id="centerBtn" class="map-btn" title="مرکز کردن نقشه">
+                    <i class="fas fa-crosshairs"></i>
+                </button>
+                <button id="fullscreenBtn" class="map-btn" title="تمام صفحه">
+                    <i class="fas fa-expand"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- هشدارها -->
+        <div class="alerts" id="alerts">
+            <h3><i class="fas fa-exclamation-triangle"></i> هشدارها</h3>
+            <div class="alerts-list" id="alertsList">
+                <div class="no-alerts">هشدار جدیدی وجود ندارد</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- اسکریپت‌ها -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

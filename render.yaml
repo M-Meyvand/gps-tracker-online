@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: gps-tracking-server
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: node gps_server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
