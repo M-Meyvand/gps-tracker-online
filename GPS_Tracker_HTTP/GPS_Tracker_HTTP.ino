@@ -1,5 +1,6 @@
 #include <SoftwareSerial.h>
 #include <TinyGPS++.h>
+#include <string.h>
 
 // پین‌های اتصال
 #define SIM800L_RX 10
@@ -13,12 +14,12 @@ SoftwareSerial gpsSerial(GPS_RX, GPS_TX);
 TinyGPSPlus gps;
 
 // تنظیمات شبکه
-const String APN = "internet"; // APN اپراتور شما (مثل: internet, mci, irancell)
-const String SERVER_URL = "http://192.168.1.5:3001"; // آدرس سرور محلی
-const String DEVICE_ID = "GPS001"; // شناسه یکتا برای دستگاه
+const char APN[] = "mtnirancell"; // APN اپراتور شما
+const char SERVER_URL[] = "https://gps-tracker-online.onrender.com"; // آدرس سرور
+const char DEVICE_ID[] = "GPS001"; // شناسه یکتا برای دستگاه
 
 // تنظیمات سیستم
-const unsigned long SEND_INTERVAL = 30000; // ارسال هر 30 ثانیه
+const unsigned long SEND_INTERVAL = 60000; // ارسال هر 60 ثانیه
 const unsigned long GPS_TIMEOUT = 10000; // 10 ثانیه تایم‌اوت GPS
 const double RADIUS_METERS = 100.0; // شعاع مجاز
 
@@ -49,17 +50,18 @@ bool internetConnected = false;
 int stableCount = 0;
 int gpsTimeout = 0;
 
-// بافر برای پاسخ HTTP
-String httpResponse = "";
-
 void setup() {
   Serial.begin(9600);
+  delay(3000);
+  
+  Serial.println("=== سیستم ردیابی GPS آنلاین ===");
+  Serial.println("Serial متصل شد");
+  
   sim800l.begin(9600);
   gpsSerial.begin(9600);
-
-  delay(2000);
-
-  Serial.println("=== سیستم ردیابی GPS آنلاین ===");
+  
+  delay(1000);
+  Serial.println("ماژول‌ها راه‌اندازی شدند");
   
   // راه‌اندازی SIM800L
   initializeSIM800L();
@@ -71,6 +73,13 @@ void setup() {
 }
 
 void loop() {
+  // تست هر 5 ثانیه
+  static unsigned long lastTest = 0;
+  if (millis() - lastTest > 5000) {
+    Serial.println("سیستم در حال کار است...");
+    lastTest = millis();
+  }
+  
   // خواندن GPS
   readGPS();
   
@@ -80,6 +89,7 @@ void loop() {
   // بررسی اتصال اینترنت
   if (!internetConnected) {
     if (millis() - lastCheck > 30000) { // هر 30 ثانیه چک کن
+      Serial.println("تلاش برای اتصال مجدد...");
       connectToInternet();
       lastCheck = millis();
     }
@@ -88,6 +98,7 @@ void loop() {
   // ارسال موقعیت
   if (trackingMode && internetConnected && currentLocation.valid) {
     if (millis() - lastSend >= SEND_INTERVAL) {
+      Serial.println("ارسال موقعیت...");
       sendLocationToServer();
       lastSend = millis();
     }
@@ -122,24 +133,38 @@ void initializeSIM800L() {
 void connectToInternet() {
   Serial.println("اتصال به اینترنت...");
   
+  // بررسی وضعیت شبکه
+  Serial.println("بررسی وضعیت شبکه...");
+  sendATCommand("AT+CREG?", 2000);
+  sendATCommand("AT+COPS?", 2000);
+  
   // تنظیم APN
-  String apnCommand = "AT+SAPBR=3,1,\"APN\",\"" + APN + "\"";
+  Serial.print("تنظیم APN: ");
+  Serial.println(APN);
+  char apnCommand[30];
+  sprintf(apnCommand, "AT+SAPBR=3,1,\"APN\",\"%s\"", APN);
   if (sendATCommand(apnCommand, 2000)) {
     Serial.println("APN تنظیم شد");
+  } else {
+    Serial.println("خطا در تنظیم APN");
   }
   
   // باز کردن اتصال GPRS
-  if (sendATCommand("AT+SAPBR=1,1", 3000)) {
+  Serial.println("باز کردن اتصال GPRS...");
+  if (sendATCommand("AT+SAPBR=1,1", 10000)) {
     Serial.println("اتصال GPRS برقرار شد");
     
     // دریافت IP
-    if (sendATCommand("AT+SAPBR=2,1", 2000)) {
+    Serial.println("دریافت آدرس IP...");
+    if (sendATCommand("AT+SAPBR=2,1", 5000)) {
       internetConnected = true;
       Serial.println("اینترنت متصل است");
+    } else {
+      Serial.println("خطا در دریافت IP");
     }
   } else {
     internetConnected = false;
-    Serial.println("خطا در اتصال به اینترنت");
+    Serial.println("خطا در اتصال GPRS");
   }
 }
 
@@ -209,29 +234,24 @@ void sendLocationToServer() {
   if (!currentLocation.valid) return;
   
   // ساخت JSON برای ارسال
-  String jsonData = "{";
-  jsonData += "\"device_id\":\"" + DEVICE_ID + "\",";
-  jsonData += "\"latitude\":" + String(currentLocation.lat, 6) + ",";
-  jsonData += "\"longitude\":" + String(currentLocation.lng, 6) + ",";
-  jsonData += "\"speed\":" + String(currentLocation.speed, 1) + ",";
-  jsonData += "\"course\":" + String(currentLocation.course, 1) + ",";
-  jsonData += "\"timestamp\":" + String(currentLocation.timestamp) + ",";
-  jsonData += "\"valid\":" + String(currentLocation.valid ? "true" : "false");
-  jsonData += "}";
+  char jsonData[150];
+  sprintf(jsonData, "{\"id\":\"%s\",\"lat\":%.6f,\"lng\":%.6f,\"spd\":%.1f,\"ts\":%lu}",
+          DEVICE_ID, currentLocation.lat, currentLocation.lng, currentLocation.speed, currentLocation.timestamp);
   
   // ارسال HTTP POST
-  String httpCommand = "AT+HTTPINIT";
-  if (sendATCommand(httpCommand, 2000)) {
+  if (sendATCommand("AT+HTTPINIT", 2000)) {
     
     // تنظیم URL
-    String urlCommand = "AT+HTTPPARA=\"URL\",\"" + SERVER_URL + "/api/location\"";
+    char urlCommand[80];
+    sprintf(urlCommand, "AT+HTTPPARA=\"URL\",\"%s/api/location\"", SERVER_URL);
     sendATCommand(urlCommand, 2000);
     
     // تنظیم Content-Type
     sendATCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 1000);
     
     // تنظیم اندازه داده
-    String dataSizeCommand = "AT+HTTPDATA=" + String(jsonData.length()) + ",10000";
+    char dataSizeCommand[30];
+    sprintf(dataSizeCommand, "AT+HTTPDATA=%d,10000", strlen(jsonData));
     sendATCommand(dataSizeCommand, 2000);
     
     // ارسال داده
@@ -240,7 +260,10 @@ void sendLocationToServer() {
     
     // ارسال درخواست
     if (sendATCommand("AT+HTTPACTION=1", 10000)) {
-      Serial.println("موقعیت ارسال شد: " + String(currentLocation.lat, 6) + ", " + String(currentLocation.lng, 6));
+      Serial.print("موقعیت ارسال شد: ");
+      Serial.print(currentLocation.lat, 6);
+      Serial.print(", ");
+      Serial.println(currentLocation.lng, 6);
     }
     
     // بستن اتصال HTTP
@@ -256,29 +279,25 @@ void checkLocationBoundary() {
   
   if (distance > RADIUS_METERS) {
     // ارسال هشدار به سرور
-    String alertData = "{";
-    alertData += "\"device_id\":\"" + DEVICE_ID + "\",";
-    alertData += "\"alert_type\":\"boundary_breach\",";
-    alertData += "\"distance\":" + String(distance, 1) + ",";
-    alertData += "\"latitude\":" + String(currentLocation.lat, 6) + ",";
-    alertData += "\"longitude\":" + String(currentLocation.lng, 6) + ",";
-    alertData += "\"timestamp\":" + String(millis());
-    alertData += "}";
+    char alertData[120];
+    sprintf(alertData, "{\"id\":\"%s\",\"alert\":\"breach\",\"dist\":%.1f,\"lat\":%.6f,\"lng\":%.6f}",
+            DEVICE_ID, distance, currentLocation.lat, currentLocation.lng);
     
     sendAlertToServer(alertData);
   }
 }
 
-void sendAlertToServer(String alertData) {
-  String httpCommand = "AT+HTTPINIT";
-  if (sendATCommand(httpCommand, 2000)) {
+void sendAlertToServer(const char* alertData) {
+  if (sendATCommand("AT+HTTPINIT", 2000)) {
     
-    String urlCommand = "AT+HTTPPARA=\"URL\",\"" + SERVER_URL + "/api/alert\"";
+    char urlCommand[80];
+    sprintf(urlCommand, "AT+HTTPPARA=\"URL\",\"%s/api/alert\"", SERVER_URL);
     sendATCommand(urlCommand, 2000);
     
     sendATCommand("AT+HTTPPARA=\"CONTENT\",\"application/json\"", 1000);
     
-    String dataSizeCommand = "AT+HTTPDATA=" + String(alertData.length()) + ",10000";
+    char dataSizeCommand[30];
+    sprintf(dataSizeCommand, "AT+HTTPDATA=%d,10000", strlen(alertData));
     sendATCommand(dataSizeCommand, 2000);
     
     sim800l.print(alertData);
@@ -287,7 +306,9 @@ void sendAlertToServer(String alertData) {
     sendATCommand("AT+HTTPACTION=1", 10000);
     sendATCommand("AT+HTTPTERM", 1000);
     
-    Serial.println("هشدار ارسال شد - فاصله: " + String(calculateDistance(baseLocation.lat, baseLocation.lng, currentLocation.lat, currentLocation.lng), 1) + " متر");
+    Serial.print("هشدار ارسال شد - فاصله: ");
+    Serial.print(calculateDistance(baseLocation.lat, baseLocation.lng, currentLocation.lat, currentLocation.lng), 1);
+    Serial.println(" متر");
   }
 }
 
@@ -304,81 +325,28 @@ double calculateDistance(double lat1, double lng1, double lat2, double lng2) {
   return R * c;
 }
 
-bool sendATCommand(String command, int timeout) {
+bool sendATCommand(const char* command, int timeout) {
+  Serial.print("ارسال: ");
+  Serial.println(command);
   sim800l.println(command);
   delay(timeout);
   
-  String response = "";
-  while (sim800l.available()) {
-    response += sim800l.readString();
+  char response[100] = "";
+  int i = 0;
+  while (sim800l.available() && i < 99) {
+    response[i] = sim800l.read();
+    i++;
+  }
+  response[i] = '\0';
+  
+  Serial.print("پاسخ: ");
+  Serial.println(response);
+  
+  bool success = (strstr(response, "OK") != NULL);
+  if (!success) {
+    Serial.print("خطا در دستور: ");
+    Serial.println(command);
   }
   
-  return response.indexOf("OK") != -1;
+  return success;
 }
-
-void checkIncomingSMS() {
-  if (sim800l.available()) {
-    String response = sim800l.readString();
-    
-    if (response.indexOf("+CMT:") != -1) {
-      delay(100);
-      String smsContent = sim800l.readString();
-      
-      int phoneStart = response.indexOf("\"") + 1;
-      int phoneEnd = response.indexOf("\"", phoneStart);
-      String senderPhone = response.substring(phoneStart, phoneEnd);
-      
-      int messageStart = smsContent.indexOf("\n") + 1;
-      String message = smsContent.substring(messageStart);
-      message.trim();
-      
-      Serial.println("پیامک از: " + senderPhone + " - محتوا: " + message);
-      
-      if (message == "start") {
-        trackingMode = true;
-        baseLocation = currentLocation;
-        locationStable = true;
-        sendSMS(senderPhone, "ردیابی آنلاین شروع شد");
-      } else if (message == "stop") {
-        trackingMode = false;
-        sendSMS(senderPhone, "ردیابی متوقف شد");
-      } else if (message == "status") {
-        String status = "وضعیت: " + String(trackingMode ? "فعال" : "غیرفعال") + "\n";
-        status += "GPS: " + String(currentLocation.valid ? "متصل" : "قطع") + "\n";
-        status += "اینترنت: " + String(internetConnected ? "متصل" : "قطع");
-        sendSMS(senderPhone, status);
-      }
-    }
-  }
-}
-
-void sendSMS(String number, String message) {
-  sim800l.print("AT+CMGS=\"");
-  sim800l.print(number);
-  sim800l.println("\"");
-  delay(500);
-  sim800l.print(message);
-  delay(500);
-  sim800l.write(26);
-  delay(3000);
-}
-
-/*
-سیستم ردیابی GPS آنلاین
-
-ویژگی‌ها:
-- ارسال موقعیت از طریق HTTP
-- نمایش Real-time روی نقشه
-- هشدار خروج از محدوده
-- ذخیره مسیر حرکت
-
-تنظیمات:
-- APN: نام اپراتور اینترنت
-- SERVER_URL: آدرس سرور
-- DEVICE_ID: شناسه دستگاه
-
-دستورات پیامکی:
-- start: شروع ردیابی
-- stop: توقف ردیابی
-- status: وضعیت سیستم
-*/
